@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 
 using UnityEngine;
 
@@ -68,29 +69,32 @@ namespace FPS
 
                 while (!cancellationToken.IsCancellationRequested)
                 {
-                    if((message = peer.ReadMessage()) == null)
-                    {
-                        continue;
-                    }
+                    Thread.Sleep(10);
 
-                    switch (message.MessageType)
+                    while ((message = peer.ReadMessage()) != null)
                     {
-                        case NetIncomingMessageType.Data:
-                            var data = message.ReadString();
-                            observer.OnNext(data);
-                            break;
-                        case NetIncomingMessageType.VerboseDebugMessage:
-                        case NetIncomingMessageType.DebugMessage:
-                        case NetIncomingMessageType.WarningMessage:
-                        case NetIncomingMessageType.ErrorMessage:
-                            observer.OnNext(message.ReadString());
-                            break;
-                        default:
-                            observer.OnNext("Unhandled type: " + message.MessageType);
-                            break;
-                    }
+                        switch (message.MessageType)
+                        {
+                            case NetIncomingMessageType.Data:
+                                var data = message.ReadString();
+                                observer.OnNext(data);
+                                break;
+                            case NetIncomingMessageType.StatusChanged:
+                                observer.OnNext(message.SenderConnection.Status.ToString());
+                                break;
+                            case NetIncomingMessageType.VerboseDebugMessage:
+                            case NetIncomingMessageType.DebugMessage:
+                            case NetIncomingMessageType.WarningMessage:
+                            case NetIncomingMessageType.ErrorMessage:
+                                observer.OnNext(message.ReadString());
+                                break;
+                            default:
+                                observer.OnNext("Unhandled type: " + message.MessageType);
+                                break;
+                        }
 
-                    peer.Recycle(message);
+                        peer.Recycle(message);
+                    }
                 }
 
                 return Disposable.Create(() =>
