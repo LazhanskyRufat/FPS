@@ -9,7 +9,7 @@ using UnityEngine;
 using UniRx;
 
 using Lidgren.Network;
-
+using FPS.Assets.Scripts;
 
 namespace FPS
 {
@@ -45,8 +45,8 @@ namespace FPS
             Observable.Timer(TimeSpan.FromSeconds(3f)).Subscribe(_ =>
             {
                 NetOutgoingMessage outgoingMessage = server.CreateMessage();
-                outgoingMessage.Write("Hello!");
-                outgoingMessage.Write("World!");
+                outgoingMessage.Write((new PositionSnapshot(10f)).Serialize());
+                //outgoingMessage.Write("World!");
                 server.SendToAll(outgoingMessage, NetDeliveryMethod.ReliableOrdered);
             });
         }
@@ -58,10 +58,10 @@ namespace FPS
             client.Start();
             client.Connect(host: "127.0.0.1", port: 14242);
 
-            MessageLoop(client, cancellationToken).Subscribe(Debug.Log).AddTo(this);
+            MessageLoop(client, cancellationToken, true).Subscribe(Debug.Log).AddTo(this);
         }
 
-        private IObservable<string> MessageLoop(NetPeer peer, CancellationToken cancellationToken)
+        private IObservable<string> MessageLoop(NetPeer peer, CancellationToken cancellationToken, bool isClient = false)
         {
             return Observable.Create<string>(observer =>
             {
@@ -76,8 +76,27 @@ namespace FPS
                         switch (message.MessageType)
                         {
                             case NetIncomingMessageType.Data:
-                                var data = message.ReadString();
-                                observer.OnNext(data);
+                                //var data = message.ReadString();
+                                try
+                                {
+                                    PositionSnapshot ps = new PositionSnapshot(0f);
+                                    ps.Deserialize(message.Data);
+                                    var data = ps.Position.ToString();
+
+                                    if (isClient)
+                                    {
+                                        NetOutgoingMessage outgoingMessage = peer.CreateMessage();
+                                        outgoingMessage.Write((new PositionSnapshot(22f)).Serialize());
+                                        //outgoingMessage.Write("World!");
+                                        peer.SendMessage(outgoingMessage, message.SenderConnection, NetDeliveryMethod.ReliableOrdered);
+                                    }
+
+                                    observer.OnNext(data);
+                                }
+                                catch(Exception ex)
+                                {
+                                    observer.OnNext(ex.Message);
+                                }
                                 break;
                             case NetIncomingMessageType.StatusChanged:
                                 observer.OnNext(message.SenderConnection.Status.ToString());
